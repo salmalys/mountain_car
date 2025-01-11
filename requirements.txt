@@ -1,3 +1,5 @@
+gym
 gymnasium
-matplotlib
 gymnasium[classic_control]
+numpy 
+matplotlib
