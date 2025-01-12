@@ -1,0 +1,21 @@
+[tool.poetry]
+name = "mountain_car"
+version = "0.1.0"
+description = "IASD Master: Reinforcement Learning project"
+authors = ["Pierre Neveu"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.14"
+numpy = "^2.2.0"
+gymnasium = {extras = ["toy-text"], version = "^1.0.0"}
+matplotlib = "^3.10.0"
+torch = "^2.5.1"
+
+
+[tool.poetry.group.dev.dependencies]
+ipykernel = "^6.29.5"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
