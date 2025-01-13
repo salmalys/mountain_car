@@ -1,6 +1,7 @@
 import numpy as np
 import gymnasium as gym
 
+
 class SarsaAgent:
     """
     Theoretical guarantees: https://sites.ualberta.ca/~szepesva/papers/sarsa98.ps.pdf
@@ -22,12 +23,12 @@ class SarsaAgent:
         self.encode_fct = encode_fct
         self.q = {}
 
-    def init(self):
+    def reset(self):
         """Initialize agent and environment"""
         self.env.reset()
         self.q = {}
 
-    def get_q_value(self, state, action):
+    def q_value(self, state, action):
         """Compute Q-value for a state-action pair by summing over the tiles."""
         return sum(self.q.get((tile, action), 0) for tile in self.encode_fct(state))
 
@@ -53,7 +54,7 @@ class SarsaAgent:
         if (soft_policy) and (np.random.rand() < epsilon):
             return np.random.choice(self.nb_actions)  # Exploration
         return np.argmax(
-            [self.get_q_value(state, action) for action in range(self.nb_actions)]
+            [self.q_value(state, action) for action in range(self.nb_actions)]
         )
 
     def update_epsilon(
@@ -99,7 +100,7 @@ class SarsaAgent:
             - rewards_historic (list): History of rewards across episodes.
         """
         # Initializations
-        self.init()
+        self.reset()
         self.q["Params"] = {
             "Nb training period": nb_episodes,
             "alpha": alpha,
@@ -128,9 +129,9 @@ class SarsaAgent:
                 next_action = self.choose_action(next_state, epsilon=epsilon)
 
                 # Compute the SARSA update
-                q_current = self.get_q_value(state, action)
+                q_current = self.q_value(state, action)
                 q_next = (
-                    self.get_q_value(next_state, next_action)
+                    self.q_value(next_state, next_action)
                     if not (task_completed or episode_over)
                     else 0
                 )
@@ -181,7 +182,6 @@ class SarsaAgent:
         total_rewards = []
 
         for episode in range(num_episodes):
-
 
             state, _ = env.reset()
             time_over = False
@@ -236,7 +236,6 @@ class SarsaAgent:
             dict: A ranking of hyperparameter sets based on the metrics.
         """
         tune_historic = {}
-        rankings = []
 
         # Iterate over all combinations of parameters
         for epsilon in epsilon_values:
@@ -255,7 +254,7 @@ class SarsaAgent:
                             print(
                                 f"Iteration {iteration + 1}/{nb_iter} for {param_key}"
                             )
-
+                        self.reset()
                         rewards = self.train(
                             nb_episodes=nb_episodes,
                             alpha=alpha,
