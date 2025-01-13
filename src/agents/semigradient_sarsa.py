@@ -7,9 +7,11 @@ from agents.td_agent import TDAgent
 class SemiGradientSarsa(TDAgent):
     def __init__(self, encode_fct: callable, nb_actions: int, weights_dim: tuple):
         """
-        - env_name (gymnasium.Env): The environment to train on.
         - nb_actions (int): Number of possible actions.
         - encode_fct (callable): Function to encode the state into features (e.g., tile coding).
+            The function must return an array integers representing the state. It it possible to return an array of just
+            on integer that represent the state.
+        - weights_dim (tuple): The dimension of the array of the weights
         """
         self.nb_actions = nb_actions
         self.encode_fct = encode_fct
@@ -36,21 +38,9 @@ class SemiGradientSarsa(TDAgent):
             return np.random.choice(self.nb_actions)
         return np.argmax([self.q_value(state, a) for a in range(self.nb_actions)])
 
-    def update_weights(
+    def update_parameters(
         self, state, action, reward, next_state, next_action, alpha, gamma
     ):
-        """
-        Perform the update of the weights.
-
-        Args:
-            - state (hashable): The current state
-            - action (int): The chosen action
-            - reward (float): The reward for The given (state, action)
-            - next_state (hashable): The t+1 state
-            - next_action (int): The t+1 action
-            - alpha (float): The learning rate
-            - gamma (float): The discount factor
-        """
         enocoded_state = self.encode_fct(state)
         next_q_value = self.q_value(next_state, next_action)
         target = reward + gamma * next_q_value
@@ -59,60 +49,3 @@ class SemiGradientSarsa(TDAgent):
         # Update weights for the selected action and
         for encoded_state in enocoded_state:
             self.weights[action][encoded_state] += alpha * td_error
-
-    def train(
-        self,
-        env: gym.Env,
-        nb_episodes,
-        max_step=None,
-        alpha=0.1,
-        gamma=0.99,
-        epsilon=0.1,
-        use_glei=False,
-        min_epsilon=0.001,
-        verbose=0,
-    ):
-        rewards_per_episode = []
-
-        step = 0
-        for episode in range(nb_episodes):
-            # Decay epsilon if we use a glei learning
-            if use_glei:
-                epsilon = super().update_epsilon(
-                    epsilon, nb_episodes, episode, min_epsilon, verbose
-                )
-
-            state, _ = env.reset()
-            action = self.choose_action(state=state, epsilon=epsilon)
-            step += 1
-            total_reward = 0
-
-            done = False
-            time_over = False
-            while not (done or time_over):
-                next_state, reward, done, time_over, _ = env.step(action)
-                next_action = self.choose_action(state=next_state, epsilon=epsilon)
-                step += 1
-                self.update_weights(
-                    state, action, reward, next_state, next_action, alpha, gamma
-                )
-
-                state = next_state
-                action = next_action
-                total_reward += reward
-
-                # Case of environment with no episodes
-                if max_step is not None:
-                    if step > max_step:
-                        return total_reward
-                    epsilon = super().update_epsilon(
-                        epsilon, max_step, step, min_epsilon, verbose
-                    )
-
-            rewards_per_episode.append(total_reward)
-            if verbose == 1:
-                print(
-                    f"Episode {episode + 1}/{nb_episodes}, Total Reward: {total_reward}"
-                )
-
-        return rewards_per_episode

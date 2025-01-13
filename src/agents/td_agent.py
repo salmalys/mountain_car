@@ -12,7 +12,32 @@ class TDAgent(ABC):
 
     @abstractmethod
     def q_value(self, state, action: int):
-        """Compute the Q-value for a given state and action."""
+        """
+        Compute the Q-value for a given state and action.
+
+        Args:
+            - state (hashable): A state encoded
+            - action (int): An action
+
+        Returns:
+            float: the value of the (state, action) tuple
+        """
+        pass
+
+    @abstractmethod
+    def update_parameters(self, state, epsilon: float = None, exploration: bool = True):
+        """
+        Update the weights/q-values/network of the agent
+
+        Args:
+            - state (hashable): The current state
+            - action (int): The chosen action
+            - reward (float): The reward for next (state, action)
+            - next_state (hashable): The t+1 state
+            - next_action (int): The t+1 action
+            - alpha (float): The learning rate
+            - gamma (float): The discount factor
+        """
         pass
 
     @abstractmethod
@@ -30,37 +55,6 @@ class TDAgent(ABC):
 
         Raises:
             - ValueError: If exploration is True and epsilon is None.
-        """
-        pass
-
-    @abstractmethod
-    def train(
-        self,
-        env: gym.Env,
-        nb_episodes: int = 1000,
-        max_step: int = None,
-        alpha: float = 0.1,
-        gamma: float = 0.99,
-        epsilon: float = 0.1,
-        use_glei: bool = False,
-        min_epsilon: float = 0.001,
-        verbose: bool = False,
-    ):
-        """
-        Training algorithm of the agent
-
-            Args:
-                - env (gymnasium.Env): the gymnasium environment to train on
-                - nb_episodes (int): Number of episodes to train for.
-                - max_step (int): The maximum number of steps for environments with no episode,
-                - alpha (float): Learning rate for updating Q-values.
-                - gamma (float): Discount factor for future rewards.
-                - epsilon (float): Initial exploration rate for epsilon-greedy policy.
-                - use_glei (bool): Whether to use a decaying epsilon (GLEI policy). Devide epislon by 2 every (nb_episodes // 5) episodes
-                - min_epsilon (float): Minimum epsilon value in GLEI policy.
-                - verbose (boolean): Print or not informations about training
-            Returns:
-                - rewards_historic (list): History of rewards across episodes.
         """
         pass
 
@@ -91,6 +85,85 @@ class TDAgent(ABC):
                 if verbose == 1:
                     print(f"\nEpsilon updated to: {epsilon}\n")
         return epsilon
+
+    def train(
+        self,
+        env: gym.Env,
+        nb_episodes: int = 1000,
+        max_step: int = None,
+        alpha: float = 0.1,
+        gamma: float = 0.99,
+        epsilon: float = 0.1,
+        use_glei: bool = False,
+        min_epsilon: float = 0.001,
+        verbose: bool = False,
+    ):
+        """
+        Training algorithm of the agent
+
+        Args:
+            - env (gymnasium.Env): the gymnasium environment to train on
+            - nb_episodes (int): Number of episodes to train for.
+            - max_step (int): The maximum number of steps for environments with no episode,
+            - alpha (float): Learning rate for updating Q-values.
+            - gamma (float): Discount factor for future rewards.
+            - epsilon (float): Initial exploration rate for epsilon-greedy policy.
+            - use_glei (bool): Whether to use a decaying epsilon (GLEI policy). Devide epislon by 2 every (nb_episodes // 5) episodes
+            - min_epsilon (float): Minimum epsilon value in GLEI policy.
+            - verbose (boolean): Print or not informations about training
+
+        Returns:
+            - rewards_historic (list): History of rewards across episodes.
+        """
+        # Initializations
+        self.reset()
+        rewards_per_episode = []
+
+        step = 0
+        for episode in range(nb_episodes):
+            # Decay epsilon if we use a glei learning
+            if use_glei:
+                epsilon = self.update_epsilon(
+                    epsilon, nb_episodes, episode, min_epsilon, verbose
+                )
+
+            # Initialize a new episode
+            state, _ = env.reset()
+            action = self.choose_action(state=state, epsilon=epsilon)
+            total_reward = 0
+
+            # Simulate an episode
+            task_completed, episode_over = False, False
+            while not (task_completed or episode_over):
+                # Compute next state action
+                next_state, reward, task_completed, episode_over, _ = env.step(action)
+                next_action = self.choose_action(state=next_state, epsilon=epsilon)
+                step += 1
+
+                # Update agent with t and t+1 values
+                if not (task_completed or episode_over):
+                    self.update_parameters(
+                        state, action, reward, next_state, next_action, alpha, gamma
+                    )
+
+                # Move to the next state and action
+                state = next_state
+                action = next_action
+                total_reward += reward
+
+                # Case of environment with no episodes
+                if max_step is not None:
+                    if step > max_step:
+                        return total_reward
+                    epsilon = super().update_epsilon(
+                        epsilon, max_step, step, min_epsilon, verbose
+                    )
+
+            rewards_per_episode.append(total_reward)
+            if verbose == 1:
+                print(f"Episode {episode + 1}: Total Reward = {total_reward}")
+
+        return rewards_per_episode
 
     def evaluate_policy(
         self,
