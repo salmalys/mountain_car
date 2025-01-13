@@ -1,6 +1,7 @@
 import math
 import numpy as np
 
+
 class IHT:
     """
     Index Hash Table Class for tile encoding from http://incompleteideas.net/tiles/tiles3.html
@@ -73,23 +74,41 @@ POSITION_MAX = 0.5
 VELOCITY_MIN = -0.07
 VELOCITY_MAX = 0.07
 
-iht_size = 2024
-num_tilings = 8
-num_tiles = 8
+IHT_SIZE = 2024
+NUM_TILINGS = 8
+NUM_TILES = 8
 
-iht = IHT(2024)
+iht = IHT(IHT_SIZE)
 
 
-def mc_tile_encoding(state):
+def mc_tile_encoding(
+    state,
+    iht: IHT = iht,
+    num_tilings: int = NUM_TILINGS,
+    num_tiles: int = NUM_TILES,
+):
     """
-    Tile encoding function for states in mountain car gymnasium problem
+    Tile encoding function for states in the Mountain Car environment.
+
+    This function performs tile coding to transform continuous state variables
+    (position and velocity) into discrete features using tile coding. Tile coding
+    is useful in reinforcement learning for handling continuous state spaces by
+    discretizing them into overlapping regions (tiles), which improves generalization.
 
     Args:
-        - state (tuple): (position, velocity)
+        - state (tuple): A tuple containing the current state of the environment,
+            represented as (position, velocity).
+            position (float): The car's position in the range [-1.2, 0.5].
+            velocity (float): The car's velocity in the range [-0.07, 0.07].
+        - iht (IHT): An instance of the Index Hash Table (IHT) used for managing tile encoding.
+        - iht_size (int, optional): The size of the IHT. This controls the maximum number of unique tiles that can be created.
+        - num_tilings (int, optional): The number of tiling grids
+        - num_tiles (int, optional): The number of tiles along each dimension per tilinggrid. This controls the resolution of the tile encoding.
 
     Returns:
-        - The list of the tiles corresponding to the given state
+        numpy.ndarray: A numpy array of tile indices corresponding to the given state. Each index represents an active tile for the given state in the discretized space.
     """
+
     # Extract the position and velocity from the gymnasium state
     position, velocity = state
 
@@ -103,6 +122,7 @@ def mc_tile_encoding(state):
     )
 
     return np.array(tiles)
+
 
 if __name__ == "__main__":
     state = (-1.0, 0.01)
