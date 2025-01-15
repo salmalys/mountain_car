@@ -124,6 +124,20 @@ def mc_tile_encoding(
     return np.array(tiles)
 
 
+def cw_encoding(state):
+    """
+    Encoding function for state in the cliff walking environment of gymnasium.
+    There is no need to encode state in this environment for our TDAgent class.
+
+    Args:
+        - state (int): a state in cliff walking environment
+
+    Returns:
+        - (list): a list with only the integer representing the state
+    """
+    return [state]
+
+
 if __name__ == "__main__":
     state = (-1.0, 0.01)
     print(mc_tile_encoding(state))
