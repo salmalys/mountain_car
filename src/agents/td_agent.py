@@ -4,6 +4,11 @@ import gymnasium as gym
 
 
 class TDAgent(ABC):
+    """
+    Base Class for TD(0) Agent (i.e. First order Time Difference Agent).
+    This class is built to handle gymnasium environments with discrete or continuous states
+    and discrete actions.
+    """
 
     @abstractmethod
     def reset(self):
@@ -25,36 +30,48 @@ class TDAgent(ABC):
         pass
 
     @abstractmethod
-    def update_parameters(self, state, epsilon: float = None, exploration: bool = True):
+    def update_parameters(
+        self,
+        state,
+        action: int,
+        reward: float,
+        next_state,
+        next_action,
+        alpha: float,
+        gamma: float,
+        is_final=False,
+    ):
         """
-        Update the weights/q-values/network of the agent
+        Update the weights/q-values/network of the agent with the t+1 q(s,) value
 
         Args:
             - state (hashable): The current state
             - action (int): The chosen action
             - reward (float): The reward for next (state, action)
             - next_state (hashable): The t+1 state
-            - next_action (int): The t+1 action
+            - next_acton (int): the t+1 action
             - alpha (float): The learning rate
             - gamma (float): The discount factor
+
+            - is_final (bool): If the episode is over at t+1
         """
-        pass
 
     @abstractmethod
-    def choose_action(self, state, epsilon: float = None, exploration: bool = True):
+    def choose_action(self, state, *args):
         """
-        Choose an action for the given state.
+        Choose an action for a given state by following the agent policy (self.policy).
 
         Args:
             - state (hashable): The current state.
-            - epsilon (float, optional): The probability of exploration (if exploration is true).
-            - exploration (bool, optional): If True, use epsilon-greedy; otherwise, choose the action with the highest Q-value.
+            - *args (float): parameters for the agent policy. For example, epsilon for epsilon greedy policy
 
         Returns:
-            - int: The selected action.
+            - int: The selected action by the agent policy.
 
         Raises:
-            - ValueError: If exploration is True and epsilon is None.
+            - ValueError: If time_step is not in ["t", "t+1"]
+            - ValueError: If epsilon is None and time step is "t"
+
         """
         pass
 
@@ -93,10 +110,10 @@ class TDAgent(ABC):
         max_step: int = None,
         alpha: float = 0.1,
         gamma: float = 0.99,
-        epsilon: float = 0.1,
         use_glei: bool = False,
         min_epsilon: float = 0.001,
         verbose: bool = False,
+        **kwargs,
     ):
         """
         Training algorithm of the agent
@@ -107,19 +124,20 @@ class TDAgent(ABC):
             - max_step (int): The maximum number of steps for environments with no episode,
             - alpha (float): Learning rate for updating Q-values.
             - gamma (float): Discount factor for future rewards.
-            - epsilon (float): Initial exploration rate for epsilon-greedy policy.
             - use_glei (bool): Whether to use a decaying epsilon (GLEI policy). Devide epislon by 2 every (nb_episodes // 5) episodes
             - min_epsilon (float): Minimum epsilon value in GLEI policy.
             - verbose (boolean): Print or not informations about training
+            - **kwargs: optional parameters for policy. For example, epsilon for epsilong-greedy policy
 
         Returns:
             - rewards_historic (list): History of rewards across episodes.
         """
         # Initializations
+        epsilon = kwargs.get("epsilon", None)  # Get epsilon if given as parameter
         self.reset()
         rewards_per_episode = []
-
         step = 0
+
         for episode in range(nb_episodes):
             # Decay epsilon if we use a glei learning
             if use_glei:
@@ -129,39 +147,45 @@ class TDAgent(ABC):
 
             # Initialize a new episode
             state, _ = env.reset()
-            action = self.choose_action(state=state, epsilon=epsilon)
-            total_reward = 0
+            action = self.choose_action(state, **kwargs)
+            episode_reward = 0
+            task_completed, episode_over = False, False
 
             # Simulate an episode
-            task_completed, episode_over = False, False
             while not (task_completed or episode_over):
-                # Compute next state action
+                # Compute next state informations
                 next_state, reward, task_completed, episode_over, _ = env.step(action)
-                next_action = self.choose_action(state=next_state, epsilon=epsilon)
+                next_action = self.choose_action(next_state, **kwargs)
                 step += 1
 
-                # Update agent with t and t+1 values
-                if not (task_completed or episode_over):
-                    self.update_parameters(
-                        state, action, reward, next_state, next_action, alpha, gamma
+                # Update agent with t and t+1 values if task is not over at t+1
+                self.update_parameters(
+                    state,
+                    action,
+                    reward,
+                    next_state,
+                    next_action,
+                    alpha,
+                    gamma,
+                    is_final=(task_completed or episode_over),
+                )
+
+                # Case of environment with no episodes
+                if max_step is not None:
+                    if step > max_step:
+                        return rewards_per_episode + [episode_reward]
+                    epsilon = self.update_epsilon(
+                        epsilon, max_step, step, min_epsilon, verbose
                     )
 
                 # Move to the next state and action
                 state = next_state
                 action = next_action
-                total_reward += reward
+                episode_reward += reward
 
-                # Case of environment with no episodes
-                if max_step is not None:
-                    if step > max_step:
-                        return total_reward
-                    epsilon = super().update_epsilon(
-                        epsilon, max_step, step, min_epsilon, verbose
-                    )
-
-            rewards_per_episode.append(total_reward)
+            rewards_per_episode.append(episode_reward)
             if verbose == 1:
-                print(f"Episode {episode + 1}: Total Reward = {total_reward}")
+                print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
 
         return rewards_per_episode
 
@@ -170,18 +194,17 @@ class TDAgent(ABC):
         env: gym.Env,
         nb_episodes: int = 10,
         max_step: int = None,
-        exploration: bool = False,
         verbose: int = 0,
+        **kwargs,
     ):
         """
         Evaluate the current Q-values of the agent and print the average reward.
 
         Args:
-            nb_episodes (int): Number of episodes to evaluate the policy.
-            exploration (bool): If True, uses an epsilon-greedy policy for action selection.
-                                If False, selects the action with the highest Q-value (greedy policy).
-            render_mode (str, optional): Rendering mode for the environment. For example, "human" to visualize the environment.
-            verbose (bool): If True, prints detailed information about the evaluation process,
+            - env (gymnasium.Env): the gymnasium environment evaluate the agent on.
+            - nb_episodes (int): Number of episodes to evaluate the policy.
+            - max_step (int): maximum step for training.
+            - verbose (bool): If True, prints detailed information about the evaluation process,
                             including training parameters and rewards for each episode.
 
         Returns:
@@ -190,18 +213,16 @@ class TDAgent(ABC):
             list: When no episodes, the list of rewards for each step
 
         """
-        rewards_over_episodes = []
-        step = 0
+        # Initializations
+        rewards_over_episodes, step = [], 0
 
         for episode in range(nb_episodes):
             state, _ = env.reset()
-            time_over = False
-            done = False
-            episode_reward = 0
+            task_completed, episode_over, episode_reward = False, False, 0
 
-            while not (done or time_over):
-                state, reward, done, time_over, _ = env.step(
-                    self.choose_action(state=state, exploration=exploration)
+            while not (task_completed or episode_over):
+                state, reward, task_completed, episode_over, _ = env.step(
+                    self.choose_action(state, **kwargs)
                 )
                 step += 1
                 episode_reward += reward
@@ -210,11 +231,12 @@ class TDAgent(ABC):
                     if episode == 0:
                         return episode_reward
                     else:
-                        return np.mean(rewards_over_episodes + episode_reward)
+                        return np.mean(rewards_over_episodes + [episode_reward])
 
             rewards_over_episodes.append(episode_reward)
             if verbose == 1:
                 print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
+
         if verbose == 1:
             print(
                 f"Average Total Reward over {nb_episodes} episodes: {np.mean(rewards_over_episodes)}"
@@ -227,14 +249,14 @@ class TDAgent(ABC):
         env: gym.Env,
         alpha_values=[0.001, 0.1, 0.2],
         gamma_values=[0.99],
-        epsilon_values=[0.01, 0.1, 0.2],
+        epsilon_values=None,
         nb_episodes=1000,
         nb_iter=10,
         use_glei=False,
         verbose=0,
     ):
         """
-        Perform a grid search over hyperparameters for the SARSA agent.
+        Perform a grid search over hyperparameters.
 
         Args:
             - alpha_values (list): Learning rates to test.
@@ -244,7 +266,7 @@ class TDAgent(ABC):
             - nb_iter (int): Number of iterations for averaging results.
             - moving_avg_size (int): Window size for the moving average in plotting.
             - verbose (bool): If True, print details of the training process.
-
+            - **kwargs (list):
         Returns:
             dict: A ranking of hyperparameter sets based on the metrics.
         """
@@ -271,9 +293,9 @@ class TDAgent(ABC):
                             nb_episodes=nb_episodes,
                             alpha=alpha,
                             gamma=gamma,
-                            epsilon=epsilon,
                             use_glei=use_glei,
                             verbose=verbose,
+                            epsilon=epsilon,
                         )
                         data[iteration] = rewards
 

@@ -4,7 +4,7 @@ import gymnasium as gym
 from agents.td_agent import TDAgent
 
 
-class Sarsa(TDAgent):
+class QLearning(TDAgent):
     """
     Theoretical guarantees: https://sites.ualberta.ca/~szepesva/papers/sarsa98.ps.pdf
     """
@@ -33,9 +33,9 @@ class Sarsa(TDAgent):
 
         - nb_actions (int): Number of possible actions.
         """
-        self.nb_actions = nb_actions
         self.encode_fct = encode_fct
         self.policy = policy
+        self.nb_actions = nb_actions
         self.q = {}
 
     def reset(self):
@@ -66,7 +66,9 @@ class Sarsa(TDAgent):
     ):
         # Compute the t and t+1 q-values
         q_current = self.q_value(state, action)
-        q_next = self.q_value(next_state, next_action)  # On policy update
+        q_next = max(
+            [self.q_value(next_state, a) for a in range(self.nb_actions)]
+        )  # Off policy update
 
         # Compute the difference between t+1 and t
         target = reward if is_final else reward + gamma * q_next
