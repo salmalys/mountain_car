@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from itertools import product
 import numpy as np
 import gymnasium as gym
 
@@ -52,7 +53,6 @@ class TDAgent(ABC):
             - next_acton (int): the t+1 action
             - alpha (float): The learning rate
             - gamma (float): The discount factor
-
             - is_final (bool): If the episode is over at t+1
         """
 
@@ -71,15 +71,14 @@ class TDAgent(ABC):
         Raises:
             - ValueError: If time_step is not in ["t", "t+1"]
             - ValueError: If epsilon is None and time step is "t"
-
         """
         pass
 
     def update_epsilon(
         self,
-        epsilon: float,
         nb_episodes: int,
         episode: int,
+        epsilon: float = None,
         min_epsilon: float = 0.001,
         verbose: int = 0,
     ):
@@ -91,15 +90,17 @@ class TDAgent(ABC):
             - nb_episodes (int): total number of episodes
             - episode (int): the current episode
             - min_epsilon (float): the minimum decayed epsilon
-            - verbose (int): 0 or 1 if we want to print informations
+            - verbose (int): verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
 
         Returns:
             - (float): the updated epsilon
         """
+        if epsilon is None:
+            ValueError("Can't use glei policy with epsilon=None")
         if episode % (nb_episodes // 5) == 0 and episode > 0:
             if not (epsilon / 2 < min_epsilon):
                 epsilon /= 2
-                if verbose == 1:
+                if verbose > 1:
                     print(f"\nEpsilon updated to: {epsilon}\n")
         return epsilon
 
@@ -112,7 +113,7 @@ class TDAgent(ABC):
         gamma: float = 0.99,
         use_glei: bool = False,
         min_epsilon: float = 0.001,
-        verbose: bool = False,
+        verbose: int = 0,
         **kwargs,
     ):
         """
@@ -126,7 +127,7 @@ class TDAgent(ABC):
             - gamma (float): Discount factor for future rewards.
             - use_glei (bool): Whether to use a decaying epsilon (GLEI policy). Devide epislon by 2 every (nb_episodes // 5) episodes
             - min_epsilon (float): Minimum epsilon value in GLEI policy.
-            - verbose (boolean): Print or not informations about training
+            - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
             - **kwargs: optional parameters for policy. For example, epsilon for epsilong-greedy policy
 
         Returns:
@@ -142,7 +143,7 @@ class TDAgent(ABC):
             # Decay epsilon if we use a glei learning
             if use_glei:
                 epsilon = self.update_epsilon(
-                    epsilon, nb_episodes, episode, min_epsilon, verbose
+                    nb_episodes, episode, epsilon, min_epsilon, verbose
                 )
 
             # Initialize a new episode
@@ -184,7 +185,7 @@ class TDAgent(ABC):
                 episode_reward += reward
 
             rewards_per_episode.append(episode_reward)
-            if verbose == 1:
+            if verbose > 1:
                 print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
 
         return rewards_per_episode
@@ -204,8 +205,7 @@ class TDAgent(ABC):
             - env (gymnasium.Env): the gymnasium environment evaluate the agent on.
             - nb_episodes (int): Number of episodes to evaluate the policy.
             - max_step (int): maximum step for training.
-            - verbose (bool): If True, prints detailed information about the evaluation process,
-                            including training parameters and rewards for each episode.
+            - verbose (bool): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
 
         Returns:
             float: The average reward obtained over the evaluated episodes.
@@ -234,7 +234,7 @@ class TDAgent(ABC):
                         return np.mean(rewards_over_episodes + [episode_reward])
 
             rewards_over_episodes.append(episode_reward)
-            if verbose == 1:
+            if verbose > 1:
                 print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
 
         if verbose == 1:
@@ -247,60 +247,82 @@ class TDAgent(ABC):
     def grid_search(
         self,
         env: gym.Env,
-        alpha_values=[0.001, 0.1, 0.2],
-        gamma_values=[0.99],
-        epsilon_values=None,
+        alpha: list,
+        gamma: list,
+        use_glei=False,
         nb_episodes=1000,
         nb_iter=10,
-        use_glei=False,
         verbose=0,
+        **kwargs,
     ):
         """
         Perform a grid search over hyperparameters.
 
         Args:
-            - alpha_values (list): Learning rates to test.
-            - gamma_values (list): Discount factors to test.
-            - epsilon_values (list): Exploration rates to test.
+            - alpha (list): List of values for the alpha hyperparameter.
+            - gamma (list): List of values for the gamma hyperparameter.
             - nb_episodes (int): Number of episodes per training iteration.
             - nb_iter (int): Number of iterations for averaging results.
-            - moving_avg_size (int): Window size for the moving average in plotting.
-            - verbose (bool): If True, print details of the training process.
-            - **kwargs (list):
+            - use_glei (bool): Whether to use the glei method during training.
+            - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
+            - **kwargs (dict): Lists of other hyperparameter values to test (e.g., epsilon).
+                Most likely to be parameters of the policy of the agent.
+                Example: {epsilon: [0.005, 0.01]} for eps-greedy
+                Example: {}temperature: [0.5, 1, 1.5]} for temp-softmax
+
         Returns:
             dict: A ranking of hyperparameter sets based on the metrics.
         """
         tune_historic = {}
 
-        # Iterate over all combinations of parameters
-        for epsilon in epsilon_values:
-            for alpha in alpha_values:
-                for gamma in gamma_values:
-                    param_key = (
-                        f"glei={use_glei}_epsilon={epsilon}_alpha={alpha}_gamma={gamma}"
-                    )
-                    if verbose == 1:
-                        print(f"Processing:\n{param_key}\n")
-                    data = np.empty((nb_iter, nb_episodes))
-                    for iteration in range(nb_iter):
-                        if verbose == 1:
-                            print(
-                                f"Iteration {iteration + 1}/{nb_iter} for {param_key}"
-                            )
-                        self.reset()
-                        rewards = self.train(
-                            env=env,
-                            nb_episodes=nb_episodes,
-                            alpha=alpha,
-                            gamma=gamma,
-                            use_glei=use_glei,
-                            verbose=verbose,
-                            epsilon=epsilon,
-                        )
-                        data[iteration] = rewards
+        # Combine alpha, gamma list of values with **kwargs
+        param_names = ["alpha", "gamma"] + list(kwargs.keys())
+        param_combinations = list(
+            product(alpha, gamma, *(kwargs[param] for param in kwargs))
+        )
 
-                    tune_historic[param_key] = {
-                        "avg": list(np.mean(data, axis=0)),
-                        "std": list(np.std(data, axis=0)),
-                    }
+        # Iterate over all combinations of hyperparameters
+        for combination in param_combinations:
+
+            # Initialize variables for the given set of hyperparameters
+            data = np.empty(
+                (nb_iter, nb_episodes)
+            )  # Array where to stock training data
+            params = dict(zip(param_names, combination))
+            param_key = f"use_glei={use_glei}_" + "_".join(
+                f"{key}={value}" for key, value in params.items()
+            )  # String to store the hyperparameters used for the data
+
+            if verbose == 1:
+                print(f"Processing:\n{param_key}\n")
+
+            # Proceed to multiple training with the current set of hyperparameters
+            for iteration in range(nb_iter):
+                if verbose > 1:
+                    print(f"Iteration {iteration + 1}/{nb_iter} for {param_key}")
+
+                # Prepare training
+                self.reset()
+                extra_params = {
+                    k: v for k, v in params.items() if k not in {"alpha", "gamma"}
+                }
+
+                # Training number i
+                rewards = self.train(
+                    env=env,
+                    nb_episodes=nb_episodes,
+                    use_glei=use_glei,
+                    verbose=verbose,
+                    alpha=params["alpha"],
+                    gamma=params["gamma"],
+                    **extra_params,  # Most likely to be parameter of the policy of the agent, epsilon for example
+                )
+                data[iteration] = rewards
+
+            # Store data for one set of hyperparameters
+            tune_historic[param_key] = {
+                "avg": list(np.mean(data, axis=0)),
+                "std": list(np.std(data, axis=0)),
+            }
+
         return tune_historic
