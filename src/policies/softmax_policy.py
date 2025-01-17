@@ -39,9 +39,10 @@ class Softmax(Policy):
         self,
         max_step: int,
         curr_step: int,
+        verbose: int = 0,
+        # kwargs:
         to_decay: bool = False,
         min_temperature: float = 0.001,
-        verbose: int = 0,
     ):
         """
         Decay epsilon through training.

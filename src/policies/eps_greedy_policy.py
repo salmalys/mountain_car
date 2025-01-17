@@ -32,9 +32,10 @@ class EpsGreedy(Policy):
         self,
         max_step: int,
         curr_step: int,
+        verbose: int = 0,
+        # kwargs:
         use_glei: bool = False,
         min_epsilon: float = 0.001,
-        verbose: int = 0,
     ):
         """
         Decay epsilon through training.
@@ -50,7 +51,7 @@ class EpsGreedy(Policy):
             if not (self.epsilon / 2 < min_epsilon):
                 self.epsilon /= 2
                 if verbose > 1:
-                    print(f"\nself. updated to: {self.epsilon}\n")
+                    print(f"\nEpsilon updated to: {self.epsilon}\n")
         else:
             pass
 
