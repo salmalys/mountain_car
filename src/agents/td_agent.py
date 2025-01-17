@@ -74,45 +74,15 @@ class TDAgent(ABC):
         """
         pass
 
-    def update_epsilon(
-        self,
-        nb_episodes: int,
-        episode: int,
-        epsilon: float = None,
-        min_epsilon: float = 0.001,
-        verbose: int = 0,
-    ):
-        """
-        Update epsilon following a GLEI (Greedy to the Limit to Exploration Infinite)
-
-        Args:
-            - epsilon (float): exploration rate to update
-            - nb_episodes (int): total number of episodes
-            - episode (int): the current episode
-            - min_epsilon (float): the minimum decayed epsilon
-            - verbose (int): verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
-
-        Returns:
-            - (float): the updated epsilon
-        """
-        if epsilon is None:
-            ValueError("Can't use glei policy with epsilon=None")
-        if episode % (nb_episodes // 5) == 0 and episode > 0:
-            if not (epsilon / 2 < min_epsilon):
-                epsilon /= 2
-                if verbose > 1:
-                    print(f"\nEpsilon updated to: {epsilon}\n")
-        return epsilon
-
     def train(
         self,
         env: gym.Env,
-        nb_episodes: int = 1000,
-        max_step: int = None,
+        policy_action_params: dict,
+        policy_update_params: dict,
         alpha: float = 0.1,
         gamma: float = 0.99,
-        use_glei: bool = False,
-        min_epsilon: float = 0.001,
+        nb_episodes: int = 1000,
+        max_step: int = None,
         verbose: int = 0,
         **kwargs,
     ):
@@ -121,42 +91,36 @@ class TDAgent(ABC):
 
         Args:
             - env (gymnasium.Env): the gymnasium environment to train on
-            - nb_episodes (int): Number of episodes to train for.
-            - max_step (int): The maximum number of steps for environments with no episode,
+            - policy_action_params (dict): arguments for the policy choose_action() method
+                ex: {"epsilon": 0.05}
+            - policy_update_params (dict): arguments for the policy update() method
+                ex: {"to_decay": False}
             - alpha (float): Learning rate for updating Q-values.
             - gamma (float): Discount factor for future rewards.
-            - use_glei (bool): Whether to use a decaying epsilon (GLEI policy). Devide epislon by 2 every (nb_episodes // 5) episodes
-            - min_epsilon (float): Minimum epsilon value in GLEI policy.
+            - nb_episodes (int): Number of episodes to train for.
+            - max_step (int): The maximum number of steps for environments with no episode,
             - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
-            - **kwargs: optional parameters for policy. For example, epsilon for epsilong-greedy policy
+            - **kwargs: optional parameters for policy. For example, epsilon, use_glei for epsilong-greedy policy
 
         Returns:
             - rewards_historic (list): History of rewards across episodes.
         """
         # Initializations
-        epsilon = kwargs.get("epsilon", None)  # Get epsilon if given as parameter
         self.reset()
         rewards_per_episode = []
         step = 0
 
         for episode in range(nb_episodes):
-            # Decay epsilon if we use a glei learning
-            if use_glei:
-                epsilon = self.update_epsilon(
-                    nb_episodes, episode, epsilon, min_epsilon, verbose
-                )
-
             # Initialize a new episode
             state, _ = env.reset()
-            action = self.choose_action(state, **kwargs)
-            episode_reward = 0
-            task_completed, episode_over = False, False
+            action = self.choose_action(state, **policy_action_params)
+            task_completed, episode_over, episode_reward = False, False, 0
 
             # Simulate an episode
             while not (task_completed or episode_over):
                 # Compute next state informations
                 next_state, reward, task_completed, episode_over, _ = env.step(action)
-                next_action = self.choose_action(next_state, **kwargs)
+                next_action = self.choose_action(next_state, **policy_action_params)
                 step += 1
 
                 # Update agent with t and t+1 values if task is not over at t+1
@@ -171,12 +135,12 @@ class TDAgent(ABC):
                     is_final=(task_completed or episode_over),
                 )
 
-                # Case of environment with no episodes
+                # Potentially update the policy parameters
                 if max_step is not None:
-                    if step > max_step:
-                        return rewards_per_episode + [episode_reward]
-                    epsilon = self.update_epsilon(
-                        epsilon, max_step, step, min_epsilon, verbose
+                    self.policy.update(
+                        max_step=max_step if max_step is not None else nb_episodes,
+                        curr_step=step if max_step is not None else episode,
+                        **policy_update_params,
                     )
 
                 # Move to the next state and action
@@ -184,27 +148,35 @@ class TDAgent(ABC):
                 action = next_action
                 episode_reward += reward
 
+                # End training if max_step reached
+                if (max_step is not None) and (step > max_step):
+                    return rewards_per_episode + [episode_reward]
+
             rewards_per_episode.append(episode_reward)
             if verbose > 1:
                 print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
+
+        if verbose == 1:
+            print(f"Last reward of training {rewards_per_episode[-1]}")
 
         return rewards_per_episode
 
     def evaluate_policy(
         self,
         env: gym.Env,
+        policy_action_params: dict,
         nb_episodes: int = 10,
         max_step: int = None,
         verbose: int = 0,
-        **kwargs,
     ):
         """
         Evaluate the current Q-values of the agent and print the average reward.
 
         Args:
             - env (gymnasium.Env): the gymnasium environment evaluate the agent on.
+            - policy_action_params (dict): arguments for the policy choose_action() method
             - nb_episodes (int): Number of episodes to evaluate the policy.
-            - max_step (int): maximum step for training.
+            - max_step (int): maximum step for evaluation.
             - verbose (bool): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
 
         Returns:
@@ -214,46 +186,44 @@ class TDAgent(ABC):
 
         """
         # Initializations
-        rewards_over_episodes, step = [], 0
+        rewards_per_episode, step = [], 0
 
         for episode in range(nb_episodes):
+            # Initialize episode
             state, _ = env.reset()
             task_completed, episode_over, episode_reward = False, False, 0
 
+            # Simulate an episo
             while not (task_completed or episode_over):
-                state, reward, task_completed, episode_over, _ = env.step(
-                    self.choose_action(state, **kwargs)
-                )
+                action = self.choose_action(state, **policy_action_params)
+                state, reward, task_completed, episode_over, _ = env.step(action)
                 step += 1
                 episode_reward += reward
-
                 if (max_step is not None) and (step > max_step):
-                    if episode == 0:
-                        return episode_reward
-                    else:
-                        return np.mean(rewards_over_episodes + [episode_reward])
+                    return rewards_per_episode + [episode_reward]
 
-            rewards_over_episodes.append(episode_reward)
+            rewards_per_episode.append(episode_reward)
             if verbose > 1:
                 print(f"Episode {episode + 1}: Total Reward = {episode_reward}")
 
         if verbose == 1:
             print(
-                f"Average Total Reward over {nb_episodes} episodes: {np.mean(rewards_over_episodes)}"
+                f"Average Total Reward over {nb_episodes} episodes: {np.mean(rewards_per_episode)}"
             )
 
-        return np.mean(rewards_over_episodes)
+        return np.mean(rewards_per_episode)
 
     def grid_search(
         self,
         env: gym.Env,
         alpha: list,
         gamma: list,
-        use_glei=False,
+        policy_action_params=dict,
+        policy_update_params=dict,
+        policy_set_params=dict,
         nb_episodes=1000,
         nb_iter=10,
         verbose=0,
-        **kwargs,
     ):
         """
         Perform a grid search over hyperparameters.
@@ -275,23 +245,41 @@ class TDAgent(ABC):
         """
         tune_historic = {}
 
-        # Combine alpha, gamma list of values with **kwargs
-        param_names = ["alpha", "gamma"] + list(kwargs.keys())
+        # Extract params names
+        param_names = (
+            ["alpha", "gamma"]
+            + list(policy_action_params.keys())
+            + list(policy_update_params.keys())
+        )
+        # Combine  values of alpha, gamma and policy params
         param_combinations = list(
-            product(alpha, gamma, *(kwargs[param] for param in kwargs))
+            product(
+                alpha,
+                gamma,
+                *(policy_action_params[param] for param in policy_action_params),
+                *(policy_update_params[parma] for parma in policy_update_params),
+            )
         )
 
-        # Iterate over all combinations of hyperparameters
         for combination in param_combinations:
 
             # Initialize variables for the given set of hyperparameters
-            data = np.empty(
-                (nb_iter, nb_episodes)
-            )  # Array where to stock training data
+            # Array where to stock training data
+            data = np.empty((nb_iter, nb_episodes))
+
+            # Current combination of parameters into a dict: {"param1": value1, "param2": value2, etc}
             params = dict(zip(param_names, combination))
-            param_key = f"use_glei={use_glei}_" + "_".join(
-                f"{key}={value}" for key, value in params.items()
-            )  # String to store the hyperparameters used for the data
+
+            # Extracting from params the parameters for the train method
+            train_policy_action_params = {
+                k: v for k, v in params.items() if k in policy_action_params.keys()
+            }
+            train_policy_update_params = {
+                k: v for k, v in params.items() if k in policy_update_params.keys()
+            }
+
+            # String to store the hyperparameters used for the data
+            param_key = "_".join(f"{key}={value}" for key, value in params.items())
 
             if verbose == 1:
                 print(f"Processing:\n{param_key}\n")
@@ -303,19 +291,16 @@ class TDAgent(ABC):
 
                 # Prepare training
                 self.reset()
-                extra_params = {
-                    k: v for k, v in params.items() if k not in {"alpha", "gamma"}
-                }
 
                 # Training number i
                 rewards = self.train(
                     env=env,
-                    nb_episodes=nb_episodes,
-                    use_glei=use_glei,
-                    verbose=verbose,
                     alpha=params["alpha"],
                     gamma=params["gamma"],
-                    **extra_params,  # Most likely to be parameter of the policy of the agent, epsilon for example
+                    policy_action_params=train_policy_action_params,
+                    policy_update_params=train_policy_update_params,
+                    nb_episodes=nb_episodes,
+                    verbose=verbose,
                 )
                 data[iteration] = rewards
 
