@@ -105,12 +105,23 @@ class TDAgent(ABC):
         Returns:
             - rewards_historic (list): History of rewards across episodes.
         """
+        if nb_episodes > 1 and max_step is not None:
+            raise ValueError("You can not give both nb_episodes and max_step")
+
         # Initializations
         self.reset()
         rewards_per_episode = []
         step = 0
 
         for episode in range(nb_episodes):
+            # Potentially update the policy parameters when using episodes as a limit
+            self.policy.update(
+                max_step=nb_episodes,
+                curr_step=episode,
+                verbose=verbose,
+                **policy_update_params,
+            )
+
             # Initialize a new episode
             state, _ = env.reset()
             action = self.choose_action(state, **policy_action_params)
@@ -135,11 +146,12 @@ class TDAgent(ABC):
                     is_final=(task_completed or episode_over),
                 )
 
-                # Potentially update the policy parameters
+                # Potentially update the policy parameters when using steps as a limit
                 if max_step is not None:
                     self.policy.update(
-                        max_step=max_step if max_step is not None else nb_episodes,
-                        curr_step=step if max_step is not None else episode,
+                        max_step=max_step,
+                        curr_step=step,
+                        verbose=verbose,
                         **policy_update_params,
                     )
 
@@ -282,7 +294,7 @@ class TDAgent(ABC):
             param_key = "_".join(f"{key}={value}" for key, value in params.items())
 
             if verbose == 1:
-                print(f"Processing:\n{param_key}\n")
+                print(f"\nProcessing:\n{param_key}\n")
 
             # Proceed to multiple training with the current set of hyperparameters
             for iteration in range(nb_iter):
