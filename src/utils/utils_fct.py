@@ -2,6 +2,23 @@ import matplotlib.pyplot as plt
 import numpy as np
 import json
 
+
+def line_plot(data_dict, window_size, name):
+    # Plot the data
+    plt.figure(figsize=(10, 6))
+
+    for name, data in data_dict.items():
+        moving_avg = np.convolve(data, np.ones(window_size) / window_size, mode="valid")
+        plt.plot(moving_avg, label=f"Moving Average of {name}", linewidth=2)
+
+    plt.title("Line Plot with Moving Average")
+    plt.xlabel("Episodes")
+    plt.ylabel("Reward")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+
 def plot_moving_averages(rewards_dict, nb_episodes, window_size):
     """
     Plots the moving averages and standard deviation of rewards for multiple reward histories
@@ -57,6 +74,7 @@ def plot_moving_averages(rewards_dict, nb_episodes, window_size):
     plt.grid()
     plt.show()
 
+
 def process_json(file_name, mode, data_dict=None):
     """
     Handles saving a dictionary to a JSON file or loading a JSON file into a dictionary.
@@ -82,7 +100,10 @@ def process_json(file_name, mode, data_dict=None):
     else:
         raise ValueError("Invalid mode. Use 'w' or 'r'.")
 
-def compare_with_moving_averages(agent1_dict, agent2_dict, num_episodes=1000, window_size=100, verbose=False):
+
+def compare_with_moving_averages(
+    agent1_dict, agent2_dict, num_episodes=1000, window_size=100, verbose=False
+):
     """
     Compare two agents using moving averages and standard deviation.
 
@@ -103,11 +124,8 @@ def compare_with_moving_averages(agent1_dict, agent2_dict, num_episodes=1000, wi
         print(f"Evaluating {agent1_name} agent...")
     agent1_rewards = [
         agent1.evaluate_policy(
-            num_episodes=1, 
-            soft_policy=False, 
-            render_mode=None, 
-            verbose=False
-        )     
+            num_episodes=1, soft_policy=False, render_mode=None, verbose=False
+        )
         for _ in range(num_episodes)
     ]
 
@@ -115,26 +133,26 @@ def compare_with_moving_averages(agent1_dict, agent2_dict, num_episodes=1000, wi
         print(f"Evaluating {agent2_name} agent...")
     agent2_rewards = [
         agent2.evaluate_policy(
-            num_episodes=1, 
-            soft_policy=False, 
-            render_mode=None, 
-            verbose=False
+            num_episodes=1, soft_policy=False, render_mode=None, verbose=False
         )
         for _ in range(num_episodes)
     ]
 
     # Prepare data for plot_moving_averages
     rewards_dict = {
-        agent1_name : {"avg": agent1_rewards},
-        agent2_name : {"avg": agent2_rewards},
+        agent1_name: {"avg": agent1_rewards},
+        agent2_name: {"avg": agent2_rewards},
     }
 
     # Use the plot_moving_averages function to visualize the results
-    plot_moving_averages(rewards_dict, nb_episodes=num_episodes, window_size=window_size)
+    plot_moving_averages(
+        rewards_dict, nb_episodes=num_episodes, window_size=window_size
+    )
 
-def compare_agents(agent1_dict, agent2_dict, num_episodes=1000, verbose = False):
+
+def compare_agents(agent1_dict, agent2_dict, num_episodes=1000, verbose=False):
     """
-    Compare two agents 
+    Compare two agents
 
     Args:
         agent1_dict (dict): The first agent instance.
@@ -152,11 +170,8 @@ def compare_agents(agent1_dict, agent2_dict, num_episodes=1000, verbose = False)
         print(f"Evaluation for {agent1_name} agent ...")
     agent1_rewards = [
         agent1.evaluate_policy(
-            num_episodes=10, 
-            soft_policy=False, 
-            render_mode=None, 
-            verbose=False
-        )     
+            num_episodes=10, soft_policy=False, render_mode=None, verbose=False
+        )
         for _ in range(num_episodes)
     ]
 
@@ -164,19 +179,16 @@ def compare_agents(agent1_dict, agent2_dict, num_episodes=1000, verbose = False)
         print(f"Evaluating {agent2_name} agent ...\n")
     agent2_rewards = [
         agent2.evaluate_policy(
-            num_episodes=1, 
-            soft_policy=False, 
-            render_mode=None, 
-            verbose=False
+            num_episodes=1, soft_policy=False, render_mode=None, verbose=False
         )
         for _ in range(num_episodes)
     ]
 
-    # Print results 
+    # Print results
     means = [np.mean(agent1_rewards), np.mean(agent2_rewards)]
     stds = [np.std(agent1_rewards), np.std(agent2_rewards)]
 
-    if verbose : 
+    if verbose:
         print(f"Average reward for {agent1_name}: {means[0]}")
         print(f"Average reward for {agent2_name}: {means[1]}\n")
 
