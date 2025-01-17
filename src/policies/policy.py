@@ -21,7 +21,7 @@ class Policy(ABC):
             -(int): an action for the corresponding state
         """
         if hard_policy:
-            return np.argmax(q_values)
+            return np.random.choice(np.where(q_values == np.max(q_values))[0])
         else:
             return self.soft_policy(q_values=q_values, **kwargs)
 

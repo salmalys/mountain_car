@@ -26,7 +26,7 @@ class EpsGreedy(Policy):
         treshold = self.epsilon if epsilon is None else epsilon
         if np.random.rand() < treshold:
             return np.random.choice(len(q_values))  # Exploration
-        return np.argmax(q_values)
+        return np.random.choice(np.where(q_values == np.max(q_values))[0])
 
     def update(
         self,

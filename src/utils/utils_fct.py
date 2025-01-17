@@ -3,19 +3,65 @@ import numpy as np
 import json
 
 
-def line_plot(data_dict, window_size, name):
+def line_bar_plot(
+    lineplot_window_size,
+    traning_data=None,
+    evaluation_data=None,
+    name="Moving average of training rewards and Bar chart of evaluations during training",
+):
+    """
+    Plots moving averages of line plots and a bar chart with two bars at specific x-axis values.
+
+    Args:
+        lineplot_window_size (int): Window size for the moving average.
+        traning_data (dict): Dictionary of data for line plots, where keys are labels and values are arrays.
+        evaluation_data (dict): Dictionary of data for bar charts, where keys are labels and values are dictionaries with 'x' and 'data'.
+    """
     # Plot the data
-    plt.figure(figsize=(10, 6))
+    plt.subplots(figsize=(12, 8))
 
-    for name, data in data_dict.items():
-        moving_avg = np.convolve(data, np.ones(window_size) / window_size, mode="valid")
-        plt.plot(moving_avg, label=f"Moving Average of {name}", linewidth=2)
+    # Plot line plots with moving averages
+    moving_avgs = []  # Store moving averages to define axis limit later
+    if traning_data is not None:
 
-    plt.title("Line Plot with Moving Average")
+        for name, data in traning_data.items():
+            moving_avg = np.convolve(
+                data, np.ones(lineplot_window_size) / lineplot_window_size, mode="valid"
+            )
+            moving_avgs.append(moving_avg)
+            plt.plot(moving_avg, label=f"Moving Average of {name}", linewidth=2)
+
+    # Plot the bar chart
+    bar_values = []
+    if evaluation_data is not None:
+        n_bars = len(evaluation_data)  # Number of bars at each x position
+        bar_width = 400.0 / n_bars  # Adjust the bar width to make them more visible
+        for i, (name, data) in enumerate(evaluation_data.items()):
+            bar_x = np.array(data["x"])
+            bar_y = np.array(data["data"])  # Keep the original y-values
+            bar_values.append(bar_y)
+            offset = (i - (n_bars - 1) / 2) * bar_width  # Center bars around bar_x
+            plt.bar(
+                bar_x + offset,
+                bar_y - np.min(moving_avgs) if len(moving_avg != 0) else bar_y,
+                width=bar_width,
+                alpha=0.5,
+                label=f"{name}",
+                bottom=np.min(moving_avgs),  # Set the bottom of the bars to 0
+            )
+
+    min_y = np.min(moving_avgs) if len(moving_avg) != 0 else np.min(bar_values)
+    max_y = np.max(bar_values) + 2 if len(bar_values) != 0 else np.max(moving_avg) + 5
+    plt.ylim(min_y, max_y)
+
+    # Add title
+    plt.title(name)
     plt.xlabel("Episodes")
     plt.ylabel("Reward")
     plt.legend()
     plt.grid(True)
+    plt.show()
+    plt.show()
     plt.show()
 
 
