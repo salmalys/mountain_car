@@ -2,6 +2,7 @@ import numpy as np
 import gymnasium as gym
 
 from agents.td_agent import TDAgent
+from policies.policy import Policy
 
 
 class QLearning(TDAgent):
@@ -12,7 +13,7 @@ class QLearning(TDAgent):
     def __init__(
         self,
         encode_fct: callable,
-        policy: callable,
+        policy: Policy,
         nb_actions: int,
     ):
         """
@@ -46,7 +47,7 @@ class QLearning(TDAgent):
         return sum(self.q.get((tile, action), 0) for tile in self.encode_fct(state))
 
     def choose_action(self, state, **kwargs):
-        return self.policy(
+        return self.policy.choose_action(
             [
                 self.q_value(state, action) for action in range(self.nb_actions)
             ],  # q-values
