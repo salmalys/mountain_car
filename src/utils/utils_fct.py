@@ -5,6 +5,7 @@ import json
 
 def line_bar_plot(
     lineplot_window_size,
+    bar_chart_width=400,
     traning_data=None,
     evaluation_data=None,
     name="Moving average of training rewards and Bar chart of evaluations during training",
@@ -35,7 +36,9 @@ def line_bar_plot(
     bar_values = []
     if evaluation_data is not None:
         n_bars = len(evaluation_data)  # Number of bars at each x position
-        bar_width = 400.0 / n_bars  # Adjust the bar width to make them more visible
+        bar_width = (
+            bar_chart_width / n_bars
+        )  # Adjust the bar width to make them more visible
         for i, (name, data) in enumerate(evaluation_data.items()):
             bar_x = np.array(data["x"])
             bar_y = np.array(data["data"])  # Keep the original y-values
@@ -65,7 +68,7 @@ def line_bar_plot(
     plt.show()
 
 
-def plot_moving_averages(rewards_dict, nb_episodes, window_size):
+def plot_moving_averages(rewards_dict, window_size):
     """
     Plots the moving averages and standard deviation of rewards for multiple reward histories
     on the same graph, with named histories provided in a dictionary.
@@ -81,12 +84,13 @@ def plot_moving_averages(rewards_dict, nb_episodes, window_size):
     """
 
     plt.figure(figsize=(15, 10))
-
+    moving_avgs = []  # Store moving averages to define axis limit later
     for param_key, data in rewards_dict.items():
         # Calculate the moving average using np.convolve
         moving_avg_rewards = np.convolve(
             data["avg"], np.ones(window_size) / window_size, mode="valid"
         )
+        moving_avgs.append(moving_avg_rewards)
 
         # Calculate the standard deviation for the same window
         std_rewards = [
@@ -110,6 +114,8 @@ def plot_moving_averages(rewards_dict, nb_episodes, window_size):
             moving_avg_rewards + std_rewards,
             alpha=0.2,  # Transparency for the shaded area
         )
+
+    plt.ylim(np.min(moving_avgs) - 50, np.max(moving_avgs) + 50)
 
     plt.xlabel("Number of Episodes")
     plt.ylabel("Moving Average of Rewards with Standard Deviation")
