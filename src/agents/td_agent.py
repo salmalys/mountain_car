@@ -81,10 +81,12 @@ class TDAgent(ABC):
         policy_update_params: dict,
         alpha: float = 0.1,
         gamma: float = 0.99,
+        seed: int = None,
         nb_episodes: int = 1000,
         max_step: int = None,
+        to_evaluate: bool = False,
+        evaluation_frequency: int = 3,
         verbose: int = 0,
-        **kwargs,
     ):
         """
         Training algorithm of the agent
@@ -98,9 +100,11 @@ class TDAgent(ABC):
             - alpha (float): Learning rate for updating Q-values.
             - gamma (float): Discount factor for future rewards.
             - nb_episodes (int): Number of episodes to train for.
+            - seed (int): seed for the starting state randomness. Stochastic if None, Determinist if not
             - max_step (int): The maximum number of steps for environments with no episode,
+            - to_evaluate (bool): If True, proceed to agent evaluation through training.
+            - evaluation_frequency (int): evaluate every nb_episodes // evaluation frequency.
             - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
-            - **kwargs: optional parameters for policy. For example, epsilon, use_glei for epsilong-greedy policy
 
         Returns:
             - rewards_historic (list): History of rewards across episodes.
@@ -111,19 +115,31 @@ class TDAgent(ABC):
         # Initializations
         self.reset()
         rewards_per_episode = []
+        evaluations = {"x": [], "data": []}
         step = 0
 
         for episode in range(nb_episodes):
             # Potentially update the policy parameters when using episodes as a limit
+            # Potentially evaluate the agent at this point.
             self.policy.update(
                 max_step=nb_episodes,
                 curr_step=episode,
                 verbose=verbose,
                 **policy_update_params,
             )
+            if to_evaluate:
+                evaluations = self.evaluate_through_training(
+                    env=env,
+                    with_step=False,
+                    max_step=nb_episodes,
+                    curr_step=episode,
+                    evaluation_frequency=evaluation_frequency,
+                    evaluations=evaluations,
+                    verbose=verbose,
+                )
 
             # Initialize a new episode
-            state, _ = env.reset()
+            state, _ = env.reset(seed=seed)
             action = self.choose_action(state, **policy_action_params)
             task_completed, episode_over, episode_reward = False, False, 0
 
@@ -146,7 +162,8 @@ class TDAgent(ABC):
                     is_final=(task_completed or episode_over),
                 )
 
-                # Potentially update the policy parameters when using steps as a limit
+                # Potentially update the policy parameters when using steps as a limit.
+                # Potentially evaluate the agent at this point.
                 if max_step is not None:
                     self.policy.update(
                         max_step=max_step,
@@ -154,6 +171,16 @@ class TDAgent(ABC):
                         verbose=verbose,
                         **policy_update_params,
                     )
+                    if to_evaluate:
+                        evaluations = self.evaluate_through_training(
+                            env=env,
+                            with_step=True,
+                            max_step=max_step,
+                            curr_step=step,
+                            evaluation_frequency=evaluation_frequency,
+                            evaluations=evaluations,
+                            verbose=verbose,
+                        )
 
                 # Move to the next state and action
                 state = next_state
@@ -171,7 +198,33 @@ class TDAgent(ABC):
         if verbose == 1:
             print(f"Last reward of training {rewards_per_episode[-1]}")
 
-        return rewards_per_episode
+        return rewards_per_episode, evaluations
+
+    def evaluate_through_training(
+        self,
+        env,
+        with_step,
+        max_step,
+        curr_step,
+        evaluation_frequency,
+        evaluations,
+        verbose,
+    ):
+        """
+        Handle evaluations through training
+        """
+        if (curr_step % (max_step // evaluation_frequency) == 0) and (curr_step > 0):
+            evaluations["x"].append(curr_step),
+            evaluations["data"].append(
+                self.evaluate_policy(
+                    env=env,
+                    policy_action_params={"hard_policy": True},
+                    nb_episodes=10 if with_step == False else 1,
+                    max_step=None if with_step == False else max_step,
+                    verbose=verbose,
+                )
+            )
+        return evaluations
 
     def evaluate_policy(
         self,
@@ -305,7 +358,7 @@ class TDAgent(ABC):
                 self.reset()
 
                 # Training number i
-                rewards = self.train(
+                rewards, _ = self.train(
                     env=env,
                     alpha=params["alpha"],
                     gamma=params["gamma"],
