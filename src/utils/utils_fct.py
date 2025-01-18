@@ -8,7 +8,7 @@ def line_bar_plot(
     bar_chart_width=400,
     traning_data=None,
     evaluation_data=None,
-    name="Moving average of training rewards and Bar chart of evaluations during training",
+    plot_name="Moving average of training rewards with evaluations during training",
 ):
     """
     Plots moving averages of line plots and a bar chart with two bars at specific x-axis values.
@@ -58,13 +58,11 @@ def line_bar_plot(
     plt.ylim(min_y, max_y)
 
     # Add title
-    plt.title(name)
+    plt.title(plot_name)
     plt.xlabel("Episodes")
     plt.ylabel("Reward")
     plt.legend()
     plt.grid(True)
-    plt.show()
-    plt.show()
     plt.show()
 
 
