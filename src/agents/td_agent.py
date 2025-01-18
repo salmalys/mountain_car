@@ -285,7 +285,6 @@ class TDAgent(ABC):
         gamma: list,
         policy_action_params=dict,
         policy_update_params=dict,
-        policy_set_params=dict,
         nb_episodes=1000,
         nb_iter=10,
         verbose=0,
