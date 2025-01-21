@@ -53,8 +53,16 @@ def line_bar_plot(
                 bottom=np.min(moving_avgs),  # Set the bottom of the bars to 0
             )
 
-    min_y = np.min(moving_avgs) if len(moving_avg) != 0 else np.min(bar_values)
-    max_y = np.max(bar_values) + 2 if len(bar_values) != 0 else np.max(moving_avg) + 5
+    min_y = (
+        min(np.min(moving_avgs), np.min(bar_values))
+        if len(moving_avg) != 0
+        else np.min(bar_values)
+    )
+    max_y = (
+        max(np.max(bar_values), np.max(moving_avg)) + 2
+        if len(bar_values) != 0
+        else np.max(moving_avg) + 5
+    )
     plt.ylim(min_y, max_y)
 
     # Add title
