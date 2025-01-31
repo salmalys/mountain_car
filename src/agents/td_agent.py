@@ -57,7 +57,7 @@ class TDAgent(ABC):
         """
 
     @abstractmethod
-    def choose_action(self, state, *args):
+    def choose_action(self, state, **kwargs):
         """
         Choose an action for a given state by following the agent policy (self.policy).
 
@@ -85,6 +85,7 @@ class TDAgent(ABC):
         nb_episodes: int = 1000,
         max_step: int = None,
         to_evaluate: bool = False,
+        evaluation_params: dict = None,
         evaluation_frequency: int = 3,
         verbose: int = 0,
     ):
@@ -103,14 +104,15 @@ class TDAgent(ABC):
             - seed (int): seed for the starting state randomness. Stochastic if None, Determinist if not
             - max_step (int): The maximum number of steps for environments with no episode,
             - to_evaluate (bool): If True, proceed to agent evaluation through training.
+            - evaluation_params (dict): If to_evaluate = True, is the policy_action_params for evaluation
             - evaluation_frequency (int): evaluate every nb_episodes // evaluation frequency.
             - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
 
         Returns:
             - rewards_historic (list): History of rewards across episodes.
         """
-        if nb_episodes > 1 and max_step is not None:
-            raise ValueError("You can not give both nb_episodes and max_step")
+        # if nb_episodes > 1 and max_step is not None:
+        #     raise Warning("You gave both nb_episodes and max step")
 
         # Initializations
         self.reset()
@@ -133,6 +135,7 @@ class TDAgent(ABC):
                     with_step=False,
                     max_step=nb_episodes,
                     curr_step=episode,
+                    evaluation_params=evaluation_params,
                     evaluation_frequency=evaluation_frequency,
                     evaluations=evaluations,
                     verbose=verbose,
@@ -164,7 +167,7 @@ class TDAgent(ABC):
 
                 # Potentially update the policy parameters when using steps as a limit.
                 # Potentially evaluate the agent at this point.
-                if max_step is not None:
+                if (max_step is not None) and (nb_episodes == 1):
                     self.policy.update(
                         max_step=max_step,
                         curr_step=step,
@@ -177,6 +180,7 @@ class TDAgent(ABC):
                             with_step=True,
                             max_step=max_step,
                             curr_step=step,
+                            evaluation_params=evaluation_params,
                             evaluation_frequency=evaluation_frequency,
                             evaluations=evaluations,
                             verbose=verbose,
@@ -206,6 +210,7 @@ class TDAgent(ABC):
         with_step,
         max_step,
         curr_step,
+        evaluation_params,
         evaluation_frequency,
         evaluations,
         verbose,
@@ -218,9 +223,10 @@ class TDAgent(ABC):
             evaluations["data"].append(
                 self.evaluate_policy(
                     env=env,
-                    policy_action_params={"hard_policy": True},
+                    policy_action_params=evaluation_params,
                     nb_episodes=10 if with_step == False else 1,
                     max_step=None if with_step == False else max_step,
+                    # max_step=2000,
                     verbose=verbose,
                 )
             )
@@ -239,7 +245,7 @@ class TDAgent(ABC):
 
         Args:
             - env (gymnasium.Env): the gymnasium environment evaluate the agent on.
-            - policy_action_params (dict): arguments for the policy choose_action() method
+            - policy_action_params (dict): arguments for the Policy class choose_action() method
             - nb_episodes (int): Number of episodes to evaluate the policy.
             - max_step (int): maximum step for evaluation.
             - verbose (bool): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
@@ -252,7 +258,6 @@ class TDAgent(ABC):
         """
         # Initializations
         rewards_per_episode, step = [], 0
-
         for episode in range(nb_episodes):
             # Initialize episode
             state, _ = env.reset()
@@ -265,7 +270,7 @@ class TDAgent(ABC):
                 step += 1
                 episode_reward += reward
                 if (max_step is not None) and (step > max_step):
-                    return rewards_per_episode + [episode_reward]
+                    return np.mean(rewards_per_episode + [episode_reward])
 
             rewards_per_episode.append(episode_reward)
             if verbose > 1:
