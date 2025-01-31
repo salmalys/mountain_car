@@ -53,11 +53,8 @@ def line_bar_plot(
                 bottom=np.min(moving_avgs),  # Set the bottom of the bars to 0
             )
 
-    min_y = (
-        min(np.min(moving_avgs), np.min(bar_values))
-        if len(moving_avg) != 0
-        else np.min(bar_values)
-    )
+    min_y = np.min(moving_avg)
+
     max_y = (
         max(np.max(bar_values), np.max(moving_avg)) + 2
         if len(bar_values) != 0
@@ -82,7 +79,6 @@ def plot_moving_averages(rewards_dict, window_size):
     Args:
         - rewards_dict (dict): A dictionary where keys are parameter combinations
           and values are {"avg": list, "std": list}
-        - nb_episodes (int): Total number of episodes per training iteration.
         - window_size (int): The size of the moving average window.
 
     Returns:
