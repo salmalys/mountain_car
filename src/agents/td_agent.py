@@ -300,14 +300,13 @@ class TDAgent(ABC):
         Args:
             - alpha (list): List of values for the alpha hyperparameter.
             - gamma (list): List of values for the gamma hyperparameter.
+            - policy_action_params & policy_update_params(dict): Lists of other hyperparameter values to test (e.g., epsilon).
+                Example: {epsilon: [0.005, 0.01]} for eps-greedy
+                Example: {}temperature: [0.5, 1, 1.5]} for temp-softmax
             - nb_episodes (int): Number of episodes per training iteration.
             - nb_iter (int): Number of iterations for averaging results.
             - use_glei (bool): Whether to use the glei method during training.
             - verbose (int): Verbosity level for debugging (0: silent, 1: general informations, 2: Precise informations).
-            - **kwargs (dict): Lists of other hyperparameter values to test (e.g., epsilon).
-                Most likely to be parameters of the policy of the agent.
-                Example: {epsilon: [0.005, 0.01]} for eps-greedy
-                Example: {}temperature: [0.5, 1, 1.5]} for temp-softmax
 
         Returns:
             dict: A ranking of hyperparameter sets based on the metrics.
