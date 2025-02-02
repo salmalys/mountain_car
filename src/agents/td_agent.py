@@ -82,7 +82,7 @@ class TDAgent(ABC):
         alpha: float = 0.1,
         gamma: float = 0.99,
         seed: int = None,
-        nb_episodes: int = 1000,
+        nb_episodes: int = None,
         max_step: int = None,
         to_evaluate: bool = False,
         evaluation_params: dict = None,
@@ -110,9 +110,15 @@ class TDAgent(ABC):
 
         Returns:
             - rewards_historic (list): History of rewards across episodes.
+            - evaluations (dict): if to_evaluate is True,
+                a dict containing
+                    - "x": list of each episodes when we have evaluated the agent during training
+                    - "data": the average rewards when evaluated 10 times for each of these x
         """
-        # if nb_episodes > 1 and max_step is not None:
-        #     raise Warning("You gave both nb_episodes and max step")
+        if nb_episodes is None and max_step is None:
+            raise Warning(
+                "You have to give at least one of nb_episodes or max_step parameters"
+            )
 
         # Initializations
         self.reset()
@@ -121,26 +127,6 @@ class TDAgent(ABC):
         step = 0
 
         for episode in range(nb_episodes):
-            # Potentially update the policy parameters when using episodes as a limit
-            # Potentially evaluate the agent at this point.
-            self.policy.update(
-                max_step=nb_episodes,
-                curr_step=episode,
-                verbose=verbose,
-                **policy_update_params,
-            )
-            if to_evaluate:
-                evaluations = self.evaluate_through_training(
-                    env=env,
-                    with_step=False,
-                    max_step=nb_episodes,
-                    curr_step=episode,
-                    evaluation_params=evaluation_params,
-                    evaluation_frequency=evaluation_frequency,
-                    evaluations=evaluations,
-                    verbose=verbose,
-                )
-
             # Initialize a new episode
             state, _ = env.reset(seed=seed)
             action = self.choose_action(state, **policy_action_params)
@@ -165,21 +151,23 @@ class TDAgent(ABC):
                     is_final=(task_completed or episode_over),
                 )
 
-                # Potentially update the policy parameters when using steps as a limit.
-                # Potentially evaluate the agent at this point.
-                if (max_step is not None) and (nb_episodes == 1):
+                # Potentially update the policy parameters
+                if (max_step is not None) or (task_completed or episode_over):
+                    max_stage = max_step if max_step is not None else nb_episodes
+                    curr_stage = step if max_step is not None else episode
                     self.policy.update(
-                        max_step=max_step,
-                        curr_step=step,
+                        max_step=max_stage,
+                        curr_step=curr_stage,
                         verbose=verbose,
                         **policy_update_params,
                     )
+                    # Potentially evaluate the agent at this point.
                     if to_evaluate:
                         evaluations = self.evaluate_through_training(
                             env=env,
                             with_step=True,
-                            max_step=max_step,
-                            curr_step=step,
+                            max_step=max_stage,
+                            curr_step=curr_stage,
                             evaluation_params=evaluation_params,
                             evaluation_frequency=evaluation_frequency,
                             evaluations=evaluations,
