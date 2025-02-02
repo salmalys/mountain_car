@@ -124,6 +124,10 @@ def mc_tile_encoding(
     return np.array(tiles)
 
 
+def no_encode(state):
+    return state
+
+
 def cw_encoding(state):
     """
     Encoding function for state in the cliff walking environment of gymnasium.
@@ -136,8 +140,3 @@ def cw_encoding(state):
         - (list): a list with only the integer representing the state
     """
     return [state]
-
-
-if __name__ == "__main__":
-    state = (-1.0, 0.01)
-    print(mc_tile_encoding(state))

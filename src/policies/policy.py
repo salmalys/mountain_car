@@ -13,7 +13,7 @@ class Policy(ABC):
         Method that choose an action according to specific parameters
 
         Args:
-            - q_values (np.array): A 1D array of the q values of a state.
+            - q_values (np.array or list): A 1D array of the q values of a state.
             - hard_policy (bool): If True, choose the argmax of q-values. If False, uses the policy
             - **kwargs (any): any parameters needed by the policy
 
