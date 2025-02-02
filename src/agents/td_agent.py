@@ -225,8 +225,8 @@ class TDAgent(ABC):
                     env=env,
                     policy_action_params=evaluation_params,
                     nb_episodes=10 if with_step == False else 1,
-                    max_step=None if with_step == False else max_step,
-                    # max_step=2000,
+                    # max_step=None if with_step == False else max_step,
+                    max_step=2000,
                     verbose=verbose,
                 )
             )
