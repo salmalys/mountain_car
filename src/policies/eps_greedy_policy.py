@@ -60,7 +60,7 @@ class EpsGreedy(Policy):
                     if verbose > 1:
                         print(f"\nEpsilon updated to: {self.epsilon}\n")
         elif decay_type == "gradually":
-            epsilon = max(0.01, 0.995 * epsilon)
+            self.epsilon = max(0.01, 0.995 * self.epsilon)
         else:
             pass
 
