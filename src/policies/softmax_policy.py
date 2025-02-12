@@ -56,9 +56,9 @@ class Softmax(Policy):
         """
         if (to_decay) and (curr_step % (max_step // 5) == 0) and (curr_step > 0):
             if not (self.temperature / 2 < min_temperature):
-                self.temperature /= 2
+                self.temperature *= 0.95
                 if verbose > 1:
-                    print(f"\nself. updated to: {self.temperature}\n")
+                    print(f"\nTemperature updated to: {self.temperature}\n")
         else:
             pass
 
