@@ -24,7 +24,7 @@ class SimpleDenseModel(nn.Module):
         return self.output_layer(x)
 
 
-class NeuralNetworkSarsa(TDAgent):
+class NeuralNetworkQLearning(TDAgent):
     def __init__(
         self,
         nb_actions: int,
@@ -101,20 +101,16 @@ class NeuralNetworkSarsa(TDAgent):
             - is_final (bool): If the episode is over at t+1
         """
         """"""
-        # # Compute q-values for the given transition
-        # q_current = self.q_value(state, action)
-        # q_next = self.q_value(next_state, next_action)
-        # y_i = reward + gamma * q_next if not is_final else reward
-
-        # # Stacking training tensors and target tensors
-        # self.qvalues_batch.append([*state, action])
-        # self.target_batch.append([*next_state, next_action])
-        # self.gamma_batch.append([gamma])
-        # self.reward_batch.append([reward if not is_final else 0])
 
         # Compute q-values for the given transition
         q_current = self.q_value(state, action, to_tensor=True)
-        q_next = self.q_value(next_state, next_action, to_tensor=True)
+
+        q_next_tensors = [
+            self.q_value(next_state, a, to_tensor=True) for a in range(self.nb_actions)
+        ]
+        q_next_values = [tensor.item() for tensor in q_next_tensors]
+        q_next = q_next_tensors[np.argmax(q_next_values)]
+
         y_i = reward + gamma * q_next if not is_final else reward + 0 * q_next
 
         # Stacking training tensors and target tensors
@@ -198,7 +194,7 @@ class NeuralNetworkSarsa(TDAgent):
             task_completed, episode_over, episode_reward = False, False, 0
 
             # Simulate an episode
-            while not (task_completed or episode_over):
+            while not (task_completed):  # or episode_reward < -1000):
                 # Compute next state informations
                 next_state, reward, task_completed, episode_over, _ = env.step(action)
                 next_action = self.choose_action(next_state, **policy_action_params)
